@@ -40,7 +40,7 @@ def enquadra(read_data):
     #checksum
     for i in range(len(enquadrado)):
         print(int(enquadrado[i]))
-    #     sum += int(enquadrado[i])
+        sum += int(enquadrado[i])
     # print(sum)
     # # checksum(enquadrado)
     encode16(enquadrado)
