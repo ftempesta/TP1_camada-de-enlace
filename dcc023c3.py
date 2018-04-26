@@ -7,7 +7,7 @@ import sys
 import _thread as thread
 import time
 
-
+TamanhoMAX = 65535
 flagEnvio = "7f"
 flagACK = "80"
 
@@ -78,7 +78,20 @@ def TransmiteDados(input, conn):
     idDeEnvio = 1
 
     while True:
-        dados = file.read()
+        dados = file.read(TamanhoMAX)
+        #if not dados: #EOF
+            #cria enquadramento
+            #cria mensagem final
+            #conn.send mensagem final
+            #conn.recv( confirmacao)
+
+            #if confirmacao = enquadramento
+            #   return, tudo certo
+            #if confirmacao != enquadramento
+            #printa ^azedou^
+            #return
+
+        #else:
         enquadramento = enquadra(dados, idDeEnvio, flagEnvio)
         dadosHEX = "".join("{:02x}".format(c) for c in dados)
         dadosHEX = ' '.join(dadosHEX[i:i+2] for i in range(0, len(dadosHEX), 2))
@@ -90,21 +103,59 @@ def TransmiteDados(input, conn):
         msgFinal = str(encode16(msgAux))
         print(msgFinal)
 
+
         print("Transmitindo")
+        #conn.send(msgFinal) nao funcionaria?
         conn.send(struct.pack("!i", len(msgFinal)))
         conn.send(struct.pack("!" + str(len(msgFinal)) + "s", msgFinal.encode("ascii")))
+
+        #confirmacao = conn.recv(qualTamanho?)
+        #manda o ACK
+        #enquadramentoACK = enquadra(' ', idDeEnvio, flagACK)
+
+        #if confirmacao = enquadramentoACK
+            #se iddeenvio  = 1, troca pra 0
+            #se nao, deixa troca pra 1
+        #if confirmacao != enquadramentoACK
+            #printa erro
+            #retorna
 
 
         return
 
 
 def RecebeDados(output, conn):
-    print("Recebendo")
-    recebe_num = int(struct.unpack("!i", connection.recv(4))[0])
-    string_byte = struct.unpack("!" + str(recebe_num) + "s", connection.recv(recebe_num))[0]
-    print(string_byte)
 
-    return
+    #primeira coisa de tudo, cria um id =1 pra ter controle de envio/recibo
+    #abre o arquivo como WB, vamos escrever no arquivo
+
+    while True:
+        #recebe
+        print("Recebendo")
+        recebe_num = int(struct.unpack("!i", connection.recv(4))[0])
+        string_byte = struct.unpack("!" + str(recebe_num) + "s", connection.recv(recebe_num))[0]
+        print(string_byte)
+
+        #confere o checksum.
+        #pega os dados em uma variavel
+
+        #cria dois cabecalhos: um com id de envio 1, outro com 0
+        #enquadramento1 = enquadra(dados, 1, flagEnvio)
+        #enquadramento2 = enquadra(dados, 0, flagENvio)
+
+        #if enquadramento1 = confereChecksum e identificador = 1
+            #manda o enquadramento com ACK e ID = 1
+            #file.write(dados) (escreve no arquivo de saida)
+            #identificador = 0
+        #if enquadramento2 = conferechecksum and identificador == 0
+            #manda o enquadramento com ACK e ID = 0
+            #file.write(dados)
+            #identificador = 1
+
+        #if se nenhum checksum bater
+            #erro
+
+        return
 
     
 identificador = sys.argv[1]
