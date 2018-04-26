@@ -72,14 +72,15 @@ def decode16(codificado):
 
 
 
-def TransmiteDados(input, conn):
+def TransmiteDados(input_file, conn):
     #Abre o arquivo
-    file = open(input, 'rb')
+    file = open(input_file, 'rb')
     idDeEnvio = 1
 
     while True:
         dados = file.read(TamanhoMAX)
-        #if not dados: #EOF
+        if not dados: #EOF
+            print("END OF FILE")
             #cria enquadramento
             #cria mensagem final
             #conn.send mensagem final
@@ -89,36 +90,42 @@ def TransmiteDados(input, conn):
             #   return, tudo certo
             #if confirmacao != enquadramento
             #printa ^azedou^
-            #return
+            return
 
-        #else:
-        enquadramento = enquadra(dados, idDeEnvio, flagEnvio)
-        dadosHEX = "".join("{:02x}".format(c) for c in dados)
-        dadosHEX = ' '.join(dadosHEX[i:i+2] for i in range(0, len(dadosHEX), 2))
-        msgAux = enquadramento + cvtHEX(dadosHEX)
-        checksumHEX = "%04x" % checksum(msgAux)
-        checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
-        checksumHEX = cvtHEX(checksumHEX)
-        print(msgAux)
-        msgFinal = str(encode16(msgAux))
-        print(msgFinal)
+        else:
+            enquadramento = enquadra(dados, idDeEnvio, flagEnvio)
+            dadosHEX = "".join("{:02x}".format(c) for c in dados)
+            dadosHEX = ' '.join(dadosHEX[i:i+2] for i in range(0, len(dadosHEX), 2))
+            msgAux = enquadramento + cvtHEX(dadosHEX)
+            print(msgAux)
+            checksumHEX = "%04x" % checksum(msgAux)
+            checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
+            checksumHEX = cvtHEX(checksumHEX)
+            print(checksumHEX)
+            print(msgAux)
+            msgFinal = str(encode16(msgAux))
+            print(msgFinal)
 
 
-        print("Transmitindo")
-        #conn.send(msgFinal) nao funcionaria?
-        conn.send(struct.pack("!i", len(msgFinal)))
-        conn.send(struct.pack("!" + str(len(msgFinal)) + "s", msgFinal.encode("ascii")))
+            print("Transmitindo")
+            #conn.send(msgFinal) nao funcionaria?
+            conn.send(struct.pack("!i", len(msgFinal)))
+            conn.send(struct.pack("!" + str(len(msgFinal)) + "s", msgFinal.encode("ascii")))
 
-        #confirmacao = conn.recv(qualTamanho?)
-        #manda o ACK
-        #enquadramentoACK = enquadra(' ', idDeEnvio, flagACK)
+            #confirmacao = conn.recv(qualTamanho?)
+            
+            #-----------------------------manda o ACK
 
-        #if confirmacao = enquadramentoACK
-            #se iddeenvio  = 1, troca pra 0
-            #se nao, deixa troca pra 1
-        #if confirmacao != enquadramentoACK
-            #printa erro
-            #retorna
+            # enquadramentoACK = enquadra('', idDeEnvio, flagACK)
+
+            # if (confirmacao == enquadramentoACK):
+            #     if(idDeEnvio == 1):
+            #         idDeEnvio = 0
+            #     else:
+            #         idDeEnvio = 1
+            # if (confirmacao != enquadramentoACK):
+            #     print("ACK recebido esta errado")
+            #     return
 
 
         return
@@ -127,35 +134,50 @@ def TransmiteDados(input, conn):
 def RecebeDados(output, conn):
 
     #primeira coisa de tudo, cria um id =1 pra ter controle de envio/recibo
+    idrecebido = 1
     #abre o arquivo como WB, vamos escrever no arquivo
+    file = open(output, 'wb')
 
     while True:
         #recebe
         print("Recebendo")
         recebe_num = int(struct.unpack("!i", connection.recv(4))[0])
         string_byte = struct.unpack("!" + str(recebe_num) + "s", connection.recv(recebe_num))[0]
-        print(string_byte)
+        string_byte = string_byte.decode("ascii")
 
         #confere o checksum.
+        confereChecksum = string_byte[20:24]
+        print(confereChecksum)
         #pega os dados em uma variavel
+        dados = string_byte[28:]
+        print(dados)
 
         #cria dois cabecalhos: um com id de envio 1, outro com 0
-        #enquadramento1 = enquadra(dados, 1, flagEnvio)
-        #enquadramento2 = enquadra(dados, 0, flagENvio)
+        enquadramento1 = enquadra(dados, 1, flagEnvio)
+        enquadramento1 = encode16(enquadramento1) + dados
+        enquadramento0 = enquadra(dados, 0, flagEnvio)
+        enquadramento0 = encode16(enquadramento0) + dados
 
-        #if enquadramento1 = confereChecksum e identificador = 1
+
+        if (enquadramento1[20:24] == confereChecksum and idrecebido == 1):
+            print("oi")
             #manda o enquadramento com ACK e ID = 1
+            criaACK = enquadra('',1, flagACK)
+            print(criaACK)
+            # conn.send(criaACK)
             #file.write(dados) (escreve no arquivo de saida)
             #identificador = 0
-        #if enquadramento2 = conferechecksum and identificador == 0
+
+        if (enquadramento0[20:24] == confereChecksum and idrecebido == 0):
+            print("oi2")
             #manda o enquadramento com ACK e ID = 0
             #file.write(dados)
             #identificador = 1
 
-        #if se nenhum checksum bater
-            #erro
-
-        return
+        else:
+            print("nao bateu nenhum checksum")
+            return
+    return
 
     
 identificador = sys.argv[1]
