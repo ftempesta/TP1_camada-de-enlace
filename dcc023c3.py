@@ -4,7 +4,7 @@ from socket import *
 from struct import *
 import struct  
 import sys
-import _thread as thread
+import threading as thread
 import time
 
 TamanhoMAX = 65535
@@ -80,16 +80,11 @@ def TransmiteDados(input_file, conn):
     while True:
         dados = file.read(TamanhoMAX)
         if not dados: #EOF
-            print("END OF FILE")
-            #cria enquadramento
-            #cria mensagem final
-            #conn.send mensagem final
-            #conn.recv( confirmacao)
 
-            #if confirmacao = enquadramento
-            #   return, tudo certo
-            #if confirmacao != enquadramento
-            #printa ^azedou^
+            msgFinal = "EOF"
+            conn.send(struct.pack("!i", len(msgFinal)))
+            conn.send(struct.pack("!" + str(len(msgFinal)) + "s", msgFinal.encode("ascii")))
+            conn.settimeout(1)
             return
 
         else:
@@ -97,14 +92,11 @@ def TransmiteDados(input_file, conn):
             dadosHEX = "".join("{:02x}".format(c) for c in dados)
             dadosHEX = ' '.join(dadosHEX[i:i+2] for i in range(0, len(dadosHEX), 2))
             msgAux = enquadramento + cvtHEX(dadosHEX)
-            print(msgAux)
-            checksumHEX = "%04x" % checksum(msgAux)
-            checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
-            checksumHEX = cvtHEX(checksumHEX)
-            print(checksumHEX)
-            print(msgAux)
+            # checksumHEX = "%04x" % checksum(msgAux)
+            # checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
+            # checksumHEX = cvtHEX(checksumHEX)
+            # print(checksumHEX)
             msgFinal = str(encode16(msgAux))
-            print(msgFinal)
 
 
             print("Transmitindo")
@@ -112,27 +104,25 @@ def TransmiteDados(input_file, conn):
             conn.send(struct.pack("!i", len(msgFinal)))
             conn.send(struct.pack("!" + str(len(msgFinal)) + "s", msgFinal.encode("ascii")))
 
-            #confirmacao = conn.recv(qualTamanho?)
+            print("Recebendo Confirmacao")
+            conn.settimeout(1)
+            confirmacao = conn.recv(4096*32)
             
             #-----------------------------manda o ACK
 
-            # enquadramentoACK = enquadra('', idDeEnvio, flagACK)
+            enquadramentoACK = enquadra('', idDeEnvio, flagACK)
 
-            # if (confirmacao == enquadramentoACK):
-            #     if(idDeEnvio == 1):
-            #         idDeEnvio = 0
-            #     else:
-            #         idDeEnvio = 1
-            # if (confirmacao != enquadramentoACK):
-            #     print("ACK recebido esta errado")
-            #     return
-
-
-        return
+            if (confirmacao == enquadramentoACK):
+                if(idDeEnvio == 1):
+                    idDeEnvio = 0
+                else:
+                    idDeEnvio = 1
+            if (confirmacao != enquadramentoACK):
+                print("[ERRO] Transmissao de dados")
+                return
 
 
 def RecebeDados(output, conn):
-
     #primeira coisa de tudo, cria um id =1 pra ter controle de envio/recibo
     idrecebido = 1
     #abre o arquivo como WB, vamos escrever no arquivo
@@ -140,42 +130,42 @@ def RecebeDados(output, conn):
 
     while True:
         #recebe
-        print("Recebendo")
-        recebe_num = int(struct.unpack("!i", connection.recv(4))[0])
-        string_byte = struct.unpack("!" + str(recebe_num) + "s", connection.recv(recebe_num))[0]
+        recebe_num = int(struct.unpack("!i", conn.recv(4))[0])
+        string_byte = struct.unpack("!" + str(recebe_num) + "s", conn.recv(recebe_num))[0]
         string_byte = string_byte.decode("ascii")
 
+        if(string_byte == "EOF"):
+            print("Conexao com o arquivo terminada, esperando outra conexao...")
+            return
+
         #confere o checksum.
-        confereChecksum = string_byte[20:24]
-        print(confereChecksum)
+        confereChecksum = string_byte[:28]
         #pega os dados em uma variavel
         dados = string_byte[28:]
-        print(dados)
 
         #cria dois cabecalhos: um com id de envio 1, outro com 0
-        enquadramento1 = enquadra(dados, 1, flagEnvio)
+        enquadramento1 = enquadra(decode16(dados), 1, flagEnvio)
         enquadramento1 = encode16(enquadramento1) + dados
-        enquadramento0 = enquadra(dados, 0, flagEnvio)
+        enquadramento0 = enquadra(decode16(dados), 0, flagEnvio)
         enquadramento0 = encode16(enquadramento0) + dados
 
-
-        if (enquadramento1[20:24] == confereChecksum and idrecebido == 1):
-            print("oi")
+        if (enquadramento1[:28] == confereChecksum and idrecebido == 1):
             #manda o enquadramento com ACK e ID = 1
             criaACK = enquadra('',1, flagACK)
-            print(criaACK)
-            # conn.send(criaACK)
-            #file.write(dados) (escreve no arquivo de saida)
-            #identificador = 0
+            conn.send(criaACK)
+            file.write(decode16(dados))
+            idrecebido = 0
+            print("Enviando confirmacao com id = 1")
 
-        if (enquadramento0[20:24] == confereChecksum and idrecebido == 0):
-            print("oi2")
+        if (enquadramento0[:28] == confereChecksum and idrecebido == 0):
             #manda o enquadramento com ACK e ID = 0
-            #file.write(dados)
-            #identificador = 1
+            criaACK = enquadra('', 0, flagACK)
+            conn.send(criaACK)
+            file.write(decode16(dados))
+            idrecebido = 1
+            print("Enviando confirmacao com id = 0")
 
         else:
-            print("nao bateu nenhum checksum")
             return
     return
 
@@ -195,13 +185,14 @@ if (identificador == "-c") :
     conn.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
 
     #-------------Criar thread para Transmitir/Receber dados------------------
-    #Thread1 = thread...transmite dados()
-    #Thread2 = thread...recebe dados()
-    #thread start()
-    TransmiteDados(input_file, conn)
+    Thread1 = thread(target=TransmiteDados, args=(input_file,conn))
+    Thread2 = thread(target=RecebeDados, args=(output_file,conn))
 
+    #----------Starta a thread---------------
+    Thread1.start()
+    Thread2.start()
     #-------------Fecha a conexao----------------------
-    #conn.close()
+    conn.close()
 
 
 elif (identificador == "-s") :
@@ -215,14 +206,15 @@ elif (identificador == "-s") :
     #-------------Cria o socket------------------
     conn = socket(AF_INET, SOCK_STREAM)
     conn.bind((ip_address, port))
-    conn.listen(5)
+    conn.listen(1)
+    connection, address = conn.accept()
+    connection.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+    connection.setsockopt(SOL_SOCKET, SO_RCVTIMEO, struct.pack('ll', 15, 0))
 
     #-------------Criar thread para Transmitir/Receber dados------------------
-    #Thread1 = thread...recebe dados()
-    #Thread2 = thread...transmite dados()
+    Thread1 = thread(target=RecebeDados, args=(output_file,conn))
+    Thread2 = thread(target=TransmiteDados, args=(input_file,conn))
     while True:
         #---------------thread start()----------------------
-        connection, address = conn.accept()
-        connection.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        connection.setsockopt(SOL_SOCKET, SO_RCVTIMEO, struct.pack('ll', 15, 0))
-        RecebeDados(output_file, connection) 
+        Thread1.start()
+        Thread2.start()
