@@ -137,7 +137,6 @@ def RecebeDados(output, conn):
         if(string_byte == "EOF"):
             print("Conexao com o arquivo terminada, esperando outra conexao...")
             return
-
         #confere o checksum.
         confereChecksum = string_byte[:28]
         #pega os dados em uma variavel
@@ -156,8 +155,7 @@ def RecebeDados(output, conn):
             file.write(decode16(dados))
             idrecebido = 0
             print("Enviando confirmacao com id = 1")
-
-        if (enquadramento0[:28] == confereChecksum and idrecebido == 0):
+        elif (enquadramento0[:28] == confereChecksum and idrecebido == 0):
             #manda o enquadramento com ACK e ID = 0
             criaACK = enquadra('', 0, flagACK)
             conn.send(criaACK)
@@ -185,14 +183,14 @@ if (identificador == "-c") :
     conn.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
 
     #-------------Criar thread para Transmitir/Receber dados------------------
-    Thread1 = thread(target=TransmiteDados, args=(input_file,conn))
-    Thread2 = thread(target=RecebeDados, args=(output_file,conn))
-
+    # Thread1 = thread(target=TransmiteDados(input_file, conn))
+    # Thread2 = thread(target=RecebeDados(output_file, conn))
     #----------Starta a thread---------------
-    Thread1.start()
-    Thread2.start()
+    # Thread1.start()
+    # Thread2.start()
+    TransmiteDados(input_file, conn)
     #-------------Fecha a conexao----------------------
-    conn.close()
+    # conn.close()
 
 
 elif (identificador == "-s") :
@@ -206,15 +204,24 @@ elif (identificador == "-s") :
     #-------------Cria o socket------------------
     conn = socket(AF_INET, SOCK_STREAM)
     conn.bind((ip_address, port))
-    conn.listen(1)
-    connection, address = conn.accept()
-    connection.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-    connection.setsockopt(SOL_SOCKET, SO_RCVTIMEO, struct.pack('ll', 15, 0))
+    # conn.listen(1)
+    # connection, address = conn.accept()
+    # connection.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+    # connection.setsockopt(SOL_SOCKET, SO_RCVTIMEO, struct.pack('ll', 15, 0))
 
+    # RecebeDados(output_file, connection)
     #-------------Criar thread para Transmitir/Receber dados------------------
-    Thread1 = thread(target=RecebeDados, args=(output_file,conn))
-    Thread2 = thread(target=TransmiteDados, args=(input_file,conn))
     while True:
+        conn.listen(1)
+        connection, address = conn.accept()
+        connection.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        connection.setsockopt(SOL_SOCKET, SO_RCVTIMEO, struct.pack('ll', 15, 0))
+
+        RecebeDados(output_file, connection)
         #---------------thread start()----------------------
-        Thread1.start()
-        Thread2.start()
+        # Thread1 = thread(target=RecebeDados(output_file, connection))
+        # Thread2 = thread(target=TransmiteDados(input_file, connection))
+        # Thread1.start()
+        # Thread2.start()
+        # RecebeDados(output_file, connection)
+        # threads.start()
