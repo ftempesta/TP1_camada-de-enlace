@@ -95,8 +95,6 @@ def TransmiteDados(input_file, conn):
             dadosHEX = "".join("{:02x}".format(c) for c in dados)
             dadosHEX = ' '.join(dadosHEX[i:i+2] for i in range(0, len(dadosHEX), 2))
             msgAux = enquadramento + cvtHEX(dadosHEX)
-
-            print(msgAux)
             #---------------Cria CHECKSUM-------------------
             checksumHEX = "%04x" % checksum(msgAux)
             checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
