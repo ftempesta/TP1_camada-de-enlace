@@ -17,9 +17,12 @@ def carry_around_add(a, b):
 
 def checksum(msg):
     s = 0
-    for i in range(0, len(msg),2):
-        w =(msg[i]<<8)+((msg[i+1]))
+    for i in range(0, len(msg)-1,2):
+        w =((msg[i])<<8)+((msg[i+1]))
         s = carry_around_add(s, w)
+    if(len(msg) %2 != 0):
+        s = s+ msg[len(msg) -1]
+        s = carry_around_add(s,0)
     return ~s &0xffff
 
 #Converte em HEXA
@@ -93,6 +96,7 @@ def TransmiteDados(input_file, conn):
             dadosHEX = ' '.join(dadosHEX[i:i+2] for i in range(0, len(dadosHEX), 2))
             msgAux = enquadramento + cvtHEX(dadosHEX)
 
+            print(msgAux)
             #---------------Cria CHECKSUM-------------------
             checksumHEX = "%04x" % checksum(msgAux)
             checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
