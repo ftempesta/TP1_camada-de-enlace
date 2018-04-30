@@ -65,3 +65,4 @@ igual ao arquivo de entrada do transmissor. Para verificar que os
 arquivos são idênticos, use ferramentas de comparação de arquivos
 como a `diff` ou de sumarização como `sha256sum`.  Exemplo: `diff
 tests/hello.txt hello-recebido.txt` para o caso do exemplo anterior.
+

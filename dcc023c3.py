@@ -8,7 +8,7 @@ import threading as thread
 import time
 
 TamanhoMAX = 65535
-flagEnvio = "7f"
+flagEnvio = "00"
 flagACK = "80"
 
 def carry_around_add(a, b):
@@ -18,7 +18,7 @@ def carry_around_add(a, b):
 def checksum(msg):
     s = 0
     for i in range(0, len(msg),2):
-        w =(msg[i])+((msg[i+1])<<8)
+        w =(msg[i]<<8)+((msg[i+1]))
         s = carry_around_add(s, w)
     return ~s &0xffff
 
@@ -47,13 +47,13 @@ def enquadra(mensagem, id, flag):
     lengthHEX = ' '.join(lengthHEX[i:i+2] for i in range(0, len(lengthHEX), 2))
     length = cvtHEX(lengthHEX)
 
+    chksum = cvtHEX("00 00")
 
     if(flag == flagACK):
         flagFinal = cvtHEX(flagACK)
     else:
         flagFinal = cvtHEX(flagEnvio)
 
-    chksum = cvtHEX("00 00")    
     # print(sincFinal, length, chksum, idFinal, flagFinal)
     enquadramento = sincFinal + sincFinal + length + chksum + idFinal + flagFinal
 
@@ -75,7 +75,7 @@ def decode16(codificado):
 def TransmiteDados(input_file, conn):
     #Abre o arquivo
     file = open(input_file, 'rb')
-    idDeEnvio = 1
+    idDeEnvio = 0
 
     while True:
         dados = file.read(TamanhoMAX)
@@ -92,11 +92,16 @@ def TransmiteDados(input_file, conn):
             dadosHEX = "".join("{:02x}".format(c) for c in dados)
             dadosHEX = ' '.join(dadosHEX[i:i+2] for i in range(0, len(dadosHEX), 2))
             msgAux = enquadramento + cvtHEX(dadosHEX)
-            # checksumHEX = "%04x" % checksum(msgAux)
-            # checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
-            # checksumHEX = cvtHEX(checksumHEX)
-            # print(checksumHEX)
+
+            #---------------Cria CHECKSUM-------------------
+            checksumHEX = "%04x" % checksum(msgAux)
+            checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
+            checksumHEX = cvtHEX(checksumHEX)
+            msgAux = encode16(msgAux)
+            msgAux = msgAux[:20] + encode16(checksumHEX) + msgAux[24:]
+            msgAux = decode16(msgAux)
             msgFinal = str(encode16(msgAux))
+
 
 
             print("Transmitindo")
@@ -112,19 +117,27 @@ def TransmiteDados(input_file, conn):
 
             enquadramentoACK = enquadra('', idDeEnvio, flagACK)
 
+
+            checksumHEX = "%04x" % checksum(enquadramentoACK)
+            checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
+            checksumHEX = cvtHEX(checksumHEX)
+            enquadramentoACK = encode16(enquadramentoACK)
+            enquadramentoACK = enquadramentoACK[:20] + encode16(checksumHEX) + enquadramentoACK[24:]
+            enquadramentoACK = decode16(enquadramentoACK)
+
+            if (confirmacao != enquadramentoACK):
+                print("[ERRO] Transmissao de dados")
+                return
             if (confirmacao == enquadramentoACK):
                 if(idDeEnvio == 1):
                     idDeEnvio = 0
                 else:
                     idDeEnvio = 1
-            if (confirmacao != enquadramentoACK):
-                print("[ERRO] Transmissao de dados")
-                return
 
 
 def RecebeDados(output, conn):
     #primeira coisa de tudo, cria um id =1 pra ter controle de envio/recibo
-    idrecebido = 1
+    idrecebido = 0
     #abre o arquivo como WB, vamos escrever no arquivo
     file = open(output, 'wb')
 
@@ -145,12 +158,44 @@ def RecebeDados(output, conn):
         #cria dois cabecalhos: um com id de envio 1, outro com 0
         enquadramento1 = enquadra(decode16(dados), 1, flagEnvio)
         enquadramento1 = encode16(enquadramento1) + dados
+        enquadramento1 = decode16(enquadramento1)
+        #---------------Cria CHECKSUM-------------------
+        checksumHEX = "%04x" % checksum(enquadramento1)
+        checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
+        checksumHEX = cvtHEX(checksumHEX)
+        enquadramento1 = encode16(enquadramento1)
+        enquadramento1 = enquadramento1[:20] + encode16(checksumHEX) + enquadramento1[24:]
+        enquadramento1 = decode16(enquadramento1)
+
+
         enquadramento0 = enquadra(decode16(dados), 0, flagEnvio)
         enquadramento0 = encode16(enquadramento0) + dados
+        enquadramento0 = decode16(enquadramento0)
+        #---------------Cria CHECKSUM-------------------
+        checksumHEX = "%04x" % checksum(enquadramento0)
+        checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
+        checksumHEX = cvtHEX(checksumHEX)
+        enquadramento0 = encode16(enquadramento0)
+        enquadramento0 = enquadramento0[:20] + encode16(checksumHEX) + enquadramento0[24:]
+        enquadramento0 = decode16(enquadramento0)
+
+        enquadramento0 = encode16(enquadramento0)
+        enquadramento1 = encode16(enquadramento1)
 
         if (enquadramento1[:28] == confereChecksum and idrecebido == 1):
             #manda o enquadramento com ACK e ID = 1
             criaACK = enquadra('',1, flagACK)
+            print(criaACK)
+
+            #---------------Cria CHECKSUM-------------------
+            checksumHEX = "%04x" % checksum(criaACK)
+            checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
+            checksumHEX = cvtHEX(checksumHEX)
+            criaACK = encode16(criaACK)
+            criaACK = criaACK[:20] + encode16(checksumHEX) + criaACK[24:]
+            criaACK = decode16(criaACK)
+
+
             conn.send(criaACK)
             file.write(decode16(dados))
             idrecebido = 0
@@ -158,6 +203,17 @@ def RecebeDados(output, conn):
         elif (enquadramento0[:28] == confereChecksum and idrecebido == 0):
             #manda o enquadramento com ACK e ID = 0
             criaACK = enquadra('', 0, flagACK)
+            print(criaACK)
+
+            #---------------Cria CHECKSUM-------------------
+            checksumHEX = "%04x" % checksum(criaACK)
+            checksumHEX = ' '.join(checksumHEX[i:i+2] for i in range(0, len(checksumHEX), 2))
+            checksumHEX = cvtHEX(checksumHEX)
+            criaACK = encode16(criaACK)
+            criaACK = criaACK[:20] + encode16(checksumHEX) + criaACK[24:]
+            criaACK = decode16(criaACK)
+
+
             conn.send(criaACK)
             file.write(decode16(dados))
             idrecebido = 1
